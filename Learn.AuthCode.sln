@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.4.33110.190
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Learn.AuthCode", "Learn.AuthCode\Learn.AuthCode.csproj", "{F8E5431C-2618-490A-9F96-71BC213EA37F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Learn.AspNet7", "Learn.AspNet7\Learn.AspNet7.csproj", "{015730B5-0DED-4B91-9BAD-0227158278FA}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{F8E5431C-2618-490A-9F96-71BC213EA37F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F8E5431C-2618-490A-9F96-71BC213EA37F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F8E5431C-2618-490A-9F96-71BC213EA37F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F8E5431C-2618-490A-9F96-71BC213EA37F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{015730B5-0DED-4B91-9BAD-0227158278FA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{015730B5-0DED-4B91-9BAD-0227158278FA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{015730B5-0DED-4B91-9BAD-0227158278FA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{015730B5-0DED-4B91-9BAD-0227158278FA}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {92DD86D4-EC53-4F47-AFF3-9A5471164F28}
+	EndGlobalSection
+EndGlobal
