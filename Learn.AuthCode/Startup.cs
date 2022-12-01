@@ -37,4 +37,18 @@ public static class Startup
             });
 
     }
+
+     /// <summary>
+    /// Initializes OpenidDict clients according to configuration (usually from appsettings.json)
+    /// </summary>
+    public static async Task SeedOpenIdClientsAsync(this IServiceProvider applicationServices)
+    {
+        await using var scope = applicationServices.CreateAsyncScope();
+        var serviceProvider = scope.ServiceProvider;
+
+        var publicUrlProvider = serviceProvider.GetRequiredService<IPublicUrlProvider>();
+        var clientSeeder = serviceProvider.GetRequiredService<ClientSeeder>();
+
+        await clientSeeder.Seed(publicUrlProvider.PublicUrl);
+    }
 }
