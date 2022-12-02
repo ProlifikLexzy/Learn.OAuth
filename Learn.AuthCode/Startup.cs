@@ -1,47 +1,101 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using Learn.AuthCode.EF;
+using Learn.AuthCode.OpenIddict;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using OpenIddict.Abstractions;
 
 namespace Learn.AuthCode;
 public static class Startup
 {
+    public static void ConfgureService(this WebApplicationBuilder builder)
+    {
+
+        builder.Services.AddControllers();
+        builder.Services.AddDbContext<IdentityContext>(options =>
+        {
+            options.UseInMemoryDatabase("OAuthTest");
+            options.UseOpenIddict();
+        });
+
+        builder.Services.AddDefaultIdentity<IdentityUser>(options =>
+            {
+                options.SignIn.RequireConfirmedAccount = false;
+                options.Lockout.AllowedForNewUsers = false;
+
+                // configure password security rules
+                builder.Configuration.GetSection("OpenId:Password").Bind(options.Password);
+            })
+            .AddRoles<IdentityRole>()
+            .AddRoleManager<RoleManager<IdentityRole>>()
+            .AddEntityFrameworkStores<IdentityContext>()
+            .AddDefaultTokenProviders();
+
+        // Configure Identity to use the same JWT claims as OpenIddict instead
+        // of the legacy WS-Federation claims it uses by default (ClaimTypes),
+        // which saves you from doing the mapping in your authorization controller.
+        builder.Services.Configure<IdentityOptions>(options =>
+        {
+            options.ClaimsIdentity.UserNameClaimType = OpenIddictConstants.Claims.Name;
+            options.ClaimsIdentity.UserIdClaimType = OpenIddictConstants.Claims.Subject;
+            options.ClaimsIdentity.RoleClaimType = OpenIddictConstants.Claims.Role;
+            options.ClaimsIdentity.EmailClaimType = OpenIddictConstants.Claims.Email;
+        });
+    }
+
     public static void ConfigureAuth(this WebApplicationBuilder builder)
     {
         builder.Services
             .AddOpenIddict()
-            .AddServer(options =>
-            {
-                options.AddDevelopmentEncryptionCertificate()
+        .AddServer(options =>
+        {
+            var publicUrl = builder.Configuration.GetSection("Auth").
+            GetValue<string>("PublicHost");
+
+            var settings = new OpenIddictSettings(options);
+            IConfiguration openIdConfiguration = builder.Configuration.GetSection("OpenId");
+
+            settings.SetConfiguration(openIdConfiguration);
+            settings.SetPublicUrl(publicUrl);
+
+            options.AddDevelopmentEncryptionCertificate()
                                    .AddDevelopmentSigningCertificate();
 
-                options.SetTokenEndpointUris("/connect/token");
-                options.UseAspNetCore().EnableTokenEndpointPassthrough();
+            options.SetTokenEndpointUris("/connect/token");
+            options.UseAspNetCore().EnableTokenEndpointPassthrough();
 
-
+            if (!settings.IsLogoutEndpointDisabled)
+            {
                 options.SetLogoutEndpointUris("/connect/logout");
                 options.UseAspNetCore().EnableLogoutEndpointPassthrough();
+            }
 
+            if (!settings.IsAuthorizeFlowDisabled)
+            {
                 options
                     .AllowAuthorizationCodeFlow()
                     .RequireProofKeyForCodeExchange()
                     .SetAuthorizationEndpointUris("/connect/authorize");
 
                 options.UseAspNetCore().EnableAuthorizationEndpointPassthrough();
+            }
 
-
+            if (settings.IsPasswordFlowAllowed)
+            {
                 options.AllowPasswordFlow();
+            }
 
+            if (!settings.IsRefreshTokenFlowDisabled)
+            {
                 options.AllowRefreshTokenFlow();
-            });
-
+            }
+        });
     }
 
-     /// <summary>
+    /// <summary>
     /// Initializes OpenidDict clients according to configuration (usually from appsettings.json)
     /// </summary>
-    public static async Task SeedOpenIdClientsAsync(this IServiceProvider applicationServices)
+    private static async Task SeedOpenIdClientsAsync(this IServiceProvider applicationServices)
     {
         await using var scope = applicationServices.CreateAsyncScope();
         var serviceProvider = scope.ServiceProvider;
@@ -50,5 +104,38 @@ public static class Startup
         var clientSeeder = serviceProvider.GetRequiredService<ClientSeeder>();
 
         await clientSeeder.Seed(publicUrlProvider.PublicUrl);
+    }
+
+    public static void Configure(this WebApplication app)
+    {
+        var forwardedHeadersOptions = new ForwardedHeadersOptions
+        {
+            ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+        };
+        forwardedHeadersOptions.KnownNetworks.Clear();
+        forwardedHeadersOptions.KnownProxies.Clear();
+        app.UseForwardedHeaders(forwardedHeadersOptions);
+
+        if (app.Environment.IsDevelopment())
+        {
+            app.UseDeveloperExceptionPage();
+            app.UseHttpsRedirection();
+        }
+        else
+        {
+            // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
+            app.UseHsts();
+        }
+
+        app.UseRouting();
+
+        app.UseAuthentication();
+        app.UseAuthorization();
+
+        app.UseDefaultFiles();
+        app.UseStaticFiles();
+        app.MapControllers();
+
+        Task.Run(app.Services.SeedOpenIdClientsAsync).GetAwaiter().GetResult();
     }
 }
