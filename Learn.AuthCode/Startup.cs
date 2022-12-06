@@ -3,14 +3,18 @@ using Learn.AuthCode.OpenIddict;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using OpenIddict.Abstractions;
 
 namespace Learn.AuthCode;
 public static class Startup
 {
+    public static void ConfigureDI(this WebApplicationBuilder builder)
+    {
+    }
+
     public static void ConfgureService(this WebApplicationBuilder builder)
     {
-
         builder.Services.AddControllers();
         builder.Services.AddDbContext<IdentityContext>(options =>
         {
@@ -43,6 +47,22 @@ public static class Startup
         });
     }
 
+    /// <summary>
+    /// Registers implementation of IOption&lt;OpenIddictConfiguration&gt; and IOpenIddictClientConfigurationProvider
+    /// </summary>
+    public static void AddOpenIddictConfiguration(
+        this IServiceCollection services,
+        IConfiguration configuration
+    )
+    {
+        services.AddTransient<
+            IOpenIddictClientConfigurationProvider,
+            OpenIddictClientConfigurationProvider
+        >();
+        services.Configure<OpenIddictConfiguration>(configuration);
+
+    }
+
     public static void ConfigureAuth(this WebApplicationBuilder builder)
     {
         builder.Services
@@ -57,6 +77,11 @@ public static class Startup
 
             settings.SetConfiguration(openIdConfiguration);
             settings.SetPublicUrl(publicUrl);
+
+            options.Services.AddOpenIddictConfiguration(settings.Configuration);
+            options.Services.AddTransient<ClientSeeder>();
+            options.Services.AddSingleton<IPublicUrlProvider>(
+                new PublicUrlProvider(settings.PublicUrl));
 
             options.AddDevelopmentEncryptionCertificate()
                                    .AddDevelopmentSigningCertificate();
@@ -89,6 +114,9 @@ public static class Startup
             {
                 options.AllowRefreshTokenFlow();
             }
+        }).AddCore(options =>
+        {
+            options.UseEntityFrameworkCore().UseDbContext<IdentityContext>();
         });
     }
 
