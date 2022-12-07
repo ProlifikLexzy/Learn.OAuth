@@ -10,6 +10,8 @@ using Microsoft.AspNetCore.Authentication;
 using OpenIddict.Server.AspNetCore;
 using System.Security.Claims;
 using System.Security.Authentication;
+using System.Collections.Specialized;
+using IdentityModel;
 
 namespace Learn.AuthCode.Controllers;
 
@@ -240,6 +242,47 @@ public class AuthorizationController: Controller
         return Error("invalid_username_or_password");
     }
 
+    private async Task<IActionResult> AuthorizeNonSpa(string returnUrl)
+    {
+        IActionResult Error(string message)
+        {
+            return RedirectToPage("./Login", new { ReturnUrl = returnUrl, ErrorMessage = message });
+        }
+
+        var externalLoginInfo = await _signInManager.GetExternalLoginInfoAsync();
+        if (externalLoginInfo == null)
+        {
+            return Error("Error loading external login information.");
+        }
+
+        try
+        {
+            TUser? user = await _userManager.FindByLoginAsync(
+                externalLoginInfo.LoginProvider,
+                externalLoginInfo.ProviderKey
+            );
+
+            if (user == null)
+            {
+                try
+                {
+                    user = await CreateUserFromExternalInfo(externalLoginInfo);
+                }
+                catch (Exception e)
+                {
+                    return Error(e.Message);
+                }
+            }
+
+            await _signInManager.SignInAsync(user, false, externalLoginInfo.LoginProvider);
+        }
+        catch (Exception e)
+        {
+            return Error(e.Message);
+        }
+
+        return LocalRedirect(returnUrl);
+    }
     /// <summary>
     ///  Customized error that is returned in case of authentication error
     /// </summary>
@@ -254,6 +297,40 @@ public class AuthorizationController: Controller
         );
 
         return Forbid(properties, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+    }
+
+    /// <summary>
+    /// Implements endpoint that external authentication should redirect to
+    /// </summary>
+    [AllowAnonymous]
+    [HttpGet("~/connect/authorize/callback")]
+    [HttpPost("~/connect/authorize/callback")]
+    [IgnoreAntiforgeryToken]
+    public virtual async Task<IActionResult> ExternalCallback(
+        string? remoteError,
+        string originalQuery
+    )
+    {
+        _logger.LogInformation("User was redirected from external provider");
+        if (remoteError != null)
+        {
+            return BadRequest("Error from external provider. " + remoteError);
+        }
+
+        if (!IsSpaRequest(originalQuery))
+        {
+            _logger.LogInformation("This is not a SPA call, will authorize and redirect");
+
+            return await AuthorizeNonSpa(originalQuery);
+        }
+        else
+        {
+            _logger.LogInformation("Will redirect to {OriginalQuery}", originalQuery);
+
+            string redirectUrl = Url.Action(nameof(Authorize), ControllerName) + originalQuery;
+
+            return LocalRedirect(redirectUrl!);
+        }
     }
 
     /// <summary>
@@ -288,6 +365,44 @@ public class AuthorizationController: Controller
             redirectUrl
         );
         return Challenge(properties, provider);
+    }
+
+    internal static string AdjustReturnUrl(string returnUrl, string provider)
+    {
+        // returnUrl could look like:
+        // - '/' (when opening login form directly
+        // - '?client_id=web_client&redirect_uri=https%3A%2F%2Flocalhost%3A5001%2Findex.html%3Fauth-callback%3D1&response_type=code&scope=offline_access&state=...&code_challenge=...&code_challenge_method=S256&response_mode=query&prompt=login&display=popup&provider=Google'
+        //      when opening via button from SPA
+        // - '?client_id=web_client&redirect_uri=https%3A%2F%2Flocalhost%3A5001%2Findex.html%3Fauth-callback%3D1&response_type=code&scope=offline_access&state=...&code_challenge=...&code_challenge_method=S256&response_mode=query&prompt=login&display=popup'
+        //      (without &provider=Google at the end) when opening from SPA via 'Internal' button, i.e. without specifying the provider
+        // - null (define when!)
+
+        returnUrl ??= "";
+        if (!IsSpaRequest(returnUrl))
+        {
+            return returnUrl;
+        }
+
+        Uri intermediateUri = CreateAbsoluteUriFromString(returnUrl);
+
+        NameValueCollection queryString = System.Web.HttpUtility.ParseQueryString(
+            intermediateUri.Query
+        );
+        queryString.Set("provider", provider);
+
+        UriBuilder builder = new UriBuilder(intermediateUri) { Query = queryString.ToString() };
+
+        returnUrl = builder.Uri.Query;
+        return returnUrl;
+    }
+
+    private static bool IsSpaRequest(string originalQuery)
+    {
+        Uri intermediateUri = CreateAbsoluteUriFromString(originalQuery);
+        NameValueCollection queryString = System.Web.HttpUtility.ParseQueryString(
+            intermediateUri.Query
+        );
+        return !string.IsNullOrEmpty(queryString.Get("client_id"));
     }
 
     /// <summary>
