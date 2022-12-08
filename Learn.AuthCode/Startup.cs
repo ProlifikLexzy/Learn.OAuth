@@ -1,10 +1,12 @@
 ﻿using Learn.AuthCode.EF;
 using Learn.AuthCode.OpenIddict;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OpenIddict.Abstractions;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Learn.AuthCode;
 public static class Startup
@@ -50,23 +52,15 @@ public static class Startup
     /// <summary>
     /// Registers implementation of IOption&lt;OpenIddictConfiguration&gt; and IOpenIddictClientConfigurationProvider
     /// </summary>
-    public static void AddOpenIddictConfiguration(
-        this IServiceCollection services,
-        IConfiguration configuration
-    )
+    public static void AddOpenIddictConfiguration(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddTransient<
-            IOpenIddictClientConfigurationProvider,
-            OpenIddictClientConfigurationProvider
-        >();
+        services.AddTransient<IOpenIddictClientConfigurationProvider, OpenIddictClientConfigurationProvider>();
         services.Configure<OpenIddictConfiguration>(configuration);
-
     }
 
     public static void ConfigureAuth(this WebApplicationBuilder builder)
     {
-        builder.Services
-            .AddOpenIddict()
+        builder.Services.AddOpenIddict()
         .AddServer(options =>
         {
             var publicUrl = builder.Configuration.GetSection("Auth").
@@ -80,11 +74,9 @@ public static class Startup
 
             options.Services.AddOpenIddictConfiguration(settings.Configuration);
             options.Services.AddTransient<ClientSeeder>();
-            options.Services.AddSingleton<IPublicUrlProvider>(
-                new PublicUrlProvider(settings.PublicUrl));
+            options.Services.AddSingleton<IPublicUrlProvider>(new PublicUrlProvider(settings.PublicUrl));
 
-            options.AddDevelopmentEncryptionCertificate()
-                                   .AddDevelopmentSigningCertificate();
+            options.AddDevelopmentEncryptionCertificate().AddDevelopmentSigningCertificate();
 
             options.SetTokenEndpointUris("/connect/token");
             options.UseAspNetCore().EnableTokenEndpointPassthrough();
@@ -118,6 +110,14 @@ public static class Startup
         {
             options.UseEntityFrameworkCore().UseDbContext<IdentityContext>();
         });
+
+        builder.Services.AddAuthentication()
+                .AddGoogle(options =>
+                {
+                    var config = builder.Configuration.GetSection("Google");
+                    builder.Configuration.GetSection("Google").Bind(options);
+                });
+        // .AddOpenIdConnect(options => builder.Configuration.Bind("Zoho", options));
     }
 
     /// <summary>

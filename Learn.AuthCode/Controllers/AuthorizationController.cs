@@ -35,9 +35,14 @@ public class AuthorizationController: Controller
     private readonly ILogger<AuthorizationController> _logger;
 
     /// <summary>
+    /// Name of the controller to be used in URL generation.
+    /// </summary>
+    protected virtual string ControllerName => GetType().Name.Replace("Controller", "");
+
+    /// <summary>
     /// Constructor for OpenIdAuthorizationControllerBase
     /// </summary>
-    protected AuthorizationController(
+    public AuthorizationController(
         SignInManager<IdentityUser> signInManager,
         UserManager<IdentityUser> userManager,
         IOpenIddictClientConfigurationProvider clientConfigurationProvider,
@@ -257,7 +262,7 @@ public class AuthorizationController: Controller
 
         try
         {
-            TUser? user = await _userManager.FindByLoginAsync(
+            IdentityUser? user = await _userManager.FindByLoginAsync(
                 externalLoginInfo.LoginProvider,
                 externalLoginInfo.ProviderKey
             );
