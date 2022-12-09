@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OpenIddict.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 
 namespace Learn.AuthCode;
 public static class Startup
@@ -111,17 +112,19 @@ public static class Startup
             options.UseEntityFrameworkCore().UseDbContext<IdentityContext>();
         });
 
-       // var config = builder.Configuration.GetSection("Google").GetValue<string>("ClientId");
+        // var config = builder.Configuration.GetSection("Google").GetValue<string>("ClientId");
 
         builder.Services.AddAuthentication()
                 .AddGoogle(options =>
                 {
-                    
+
                     builder.Configuration.GetSection("Google").Bind(options);
                 })
-        .AddOpenIdConnect(options => 
-        { 
-            builder.Configuration.Bind("Zoho", options); 
+        .AddOpenIdConnect("Zoho", options =>
+        {
+            builder.Configuration.Bind("Zoho", options);
+            options.ResponseType = OpenIdConnectResponseType.Code;
+            options.ProtocolValidator.RequireNonce = false;
         });
     }
 
