@@ -55,6 +55,93 @@ public class AuthorizationController: Controller
         _logger = logger;
     }
 
+    /// <summary>
+    /// Implements token endpoint for all auth flows
+    /// </summary>
+    [AllowAnonymous]
+    [HttpPost("~/connect/token"), Produces("application/json")]
+    public virtual async Task<IActionResult> Exchange()
+    {
+        OpenIddictRequest? request = HttpContext.GetOpenIddictServerRequest();
+        if (request == null)
+        {
+            throw new ArgumentNullException(nameof(request));
+        }
+
+        if (request.IsAuthorizationCodeGrantType())
+        {
+            var authenticateResult = await HttpContext.AuthenticateAsync(
+                OpenIddictServerAspNetCoreDefaults.AuthenticationScheme
+            );
+            if (!authenticateResult.Succeeded)
+            {
+                return StandardError();
+            }
+
+            IdentityUser? user = await _userManager.GetUserAsync(authenticateResult.Principal);
+
+            return await SignInUser(user, request);
+        }
+        else if (request.IsPasswordGrantType())
+        {
+            var user = await _userManager.FindByNameAsync(request.Username);
+            if (user == null)
+            {
+                return StandardError();
+            }
+
+            // Validate the username/password parameters and ensure the account is not locked out.
+            var result = await _signInManager.CheckPasswordSignInAsync(
+                user,
+                request.Password,
+                lockoutOnFailure: true
+            );
+            if (!result.Succeeded)
+            {
+                return StandardError();
+            }
+
+            return await SignInUser(user, request);
+        }
+        else if (request.IsRefreshTokenGrantType() || request.IsDeviceCodeGrantType())
+        {
+            // Retrieve the claims principal stored in the refresh token.
+            var info = await HttpContext.AuthenticateAsync(
+                OpenIddictServerAspNetCoreDefaults.AuthenticationScheme
+            );
+
+            // Retrieve the user profile corresponding to the refresh token.
+            // Note: if you want to automatically invalidate the refresh token
+            // when the user password/roles change, use the following line instead:
+            // var user = _signInManager.ValidateSecurityStampAsync(info.Principal);
+            var user = await _userManager.GetUserAsync(info.Principal);
+            if (user == null)
+            {
+                if (request.IsRefreshTokenGrantType())
+                {
+                    return Error("refresh_token_invalid");
+                }
+                else if (request.IsDeviceCodeGrantType())
+                {
+                    return Error("device_code_invalid");
+                }
+                else
+                {
+                    return Error("token_invalid");
+                }
+            }
+
+            // Ensure the user is still allowed to sign in.
+            if (!await _signInManager.CanSignInAsync(user))
+            {
+                return StandardError();
+            }
+
+            return await SignInUser(user, request);
+        }
+
+        throw new NotImplementedException("The specified grant type is not implemented.");
+    }
 
     /// <summary>
     /// Creates Asp.Net Identity user based on information from external auth provider.

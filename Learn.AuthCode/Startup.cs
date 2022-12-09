@@ -111,13 +111,18 @@ public static class Startup
             options.UseEntityFrameworkCore().UseDbContext<IdentityContext>();
         });
 
+       // var config = builder.Configuration.GetSection("Google").GetValue<string>("ClientId");
+
         builder.Services.AddAuthentication()
                 .AddGoogle(options =>
                 {
-                    var config = builder.Configuration.GetSection("Google");
+                    
                     builder.Configuration.GetSection("Google").Bind(options);
-                });
-        // .AddOpenIdConnect(options => builder.Configuration.Bind("Zoho", options));
+                })
+        .AddOpenIdConnect(options => 
+        { 
+            builder.Configuration.Bind("Zoho", options); 
+        });
     }
 
     /// <summary>
